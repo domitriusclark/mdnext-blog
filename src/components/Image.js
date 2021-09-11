@@ -1,92 +1,74 @@
 import NextImage from 'next/image';
+import { useImage } from 'use-cloudinary';
+import { chakra } from '@chakra-ui/react';
 
-import { Box } from '@chakra-ui/react';
-import { buildImageUrl } from 'cloudinary-build-url';
-import useBlurredPlaceholder from '@hooks/useBlurredPlaceholder';
-
-const isUrl = (string) =>
-  string.match(
-    /^(ht|f)tps?:\/\/[a-z0-9-.]+\.[a-z]{2,4}\/?([^\s<>#%",{}\\|\\^[\]`]+)?$/,
-  );
-
-function decideStorageDefault(string) {
-  if (isUrl(string)) {
-    return 'fetch';
-  } else {
-    return 'upload';
-  }
-}
+const ChakraNextImage = chakra(NextImage, {
+  shouldForwardProp: (prop) =>
+    [
+      'width',
+      'height',
+      'src',
+      'alt',
+      'quality',
+      'placeholder',
+      'blurDataURL',
+      'loader ',
+    ].includes(prop),
+});
 
 export default function Image({
-  src,
-  cloudName,
+  // Cloudinary Props
   publicId,
-  transforms,
+  transformations,
+  cloudName,
+  storageType,
+
+  // Next Image props
+  src,
   width,
   height,
-  storageType,
   alt,
-  blurPlaceholder,
-  styles,
+
+  // Everything else
   ...rest
 }) {
-  const {
-    blurredPlaceholderUrl,
-    supportsLazyLoading,
-    ref,
-    inView,
-  } = useBlurredPlaceholder(cloudName ? cloudName : '');
+  const { generateImageUrl } = useImage(cloudName);
 
   const cloudinaryUrl =
     cloudName &&
-    buildImageUrl(publicId, {
-      cloud: {
-        cloudName,
-        storageType: storageType ? storageType : decideStorageDefault(publicId),
+    generateImageUrl({
+      delivery: {
+        publicId: props.src,
+        storageType: 'fetch',
       },
-      transformations: {
-        ...transforms,
-      },
+
+      // Auto apply crop to size provided by width & height props
+      transformation: [
+        {
+          crop: 'scale',
+          width,
+          height,
+        },
+        // Auto apply best format and quality transformations -- tweak where needed
+        {
+          format: 'auto',
+          quality: 'auto',
+        },
+      ],
     });
 
-  if (blurPlaceholder) {
-    return (
-      <Box
-        ref={!supportsLazyLoading ? ref : undefined}
-        sx={{
-          width: 'auto',
-          background: `no-repeat url(${blurredPlaceholderUrl({
-            publicId,
-            width,
-            height,
-          })})`,
-          ...styles,
-        }}
-      >
-        {inView ||
-          (supportsLazyLoading && (
-            <NextImage
-              src={cloudName ? cloudinaryUrl : src}
-              width={width}
-              height={height}
-              quality={quality || '100'}
-              alt={alt}
-              {...rest}
-            />
-          ))}
-      </Box>
-    );
-  } else {
-    return (
-      <Box sx={{ ...styles }}>
-        <NextImage
-          src={cloudName ? cloudinaryUrl : src}
-          width={width}
-          height={height}
-          alt={alt}
-          {...rest}
-        />
-      </Box>
-    );
-  }
+  return (
+    <Box pos="relative" cursor="pointer" {...rest}>
+      <ChakraNextImage
+        w="auto"
+        h="auto"
+        width={width}
+        height={height}
+        placeholder="blur"
+        blurDataURL={`data:image/svg+xml;base64,${toBase64(shimmer(60, 60))}`}
+        src={cloudinaryUrl !== undefined ? cloudinaryUrl : src}
+        alt={alt}
+      />
+    </Box>
+  );
 }
